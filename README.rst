@@ -7,3 +7,7 @@ to a Kafka topic, **checker-consumer** will read monitoring events from the same
 them in a PostgreSQL database.
 
 To run tests, execute ``make test``
+
+Source code for the PostgreSQL schema can be found in **storage** folder.
+To bootstrap a new instance of website checker database, run
+``./storage/bootstrap.sh``

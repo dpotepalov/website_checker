@@ -1,4 +1,6 @@
 import pytest
+import psycopg2
+from os import environ
 
 
 class Checker:
@@ -7,8 +9,17 @@ class Checker:
 
 
 class Storage:
+    def __init__(self, connstring):
+        self.connstring = connstring
+
+    def _execute(self, query):
+        with psycopg2.connect(self.connstring) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                return cursor.fetchall()
+
     def list(self):
-        return []
+        return self._execute('SELECT * FROM checker.list_results')
 
 
 @pytest.fixture
@@ -18,4 +29,5 @@ def checker():
 
 @pytest.fixture
 def storage():
-    return Storage()
+    assert 'STORAGE_CONNSTRING' in environ
+    return Storage(environ['STORAGE_CONNSTRING'])
