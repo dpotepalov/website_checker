@@ -1,5 +1,6 @@
 import pytest
 import psycopg2
+from subprocess import Popen
 from os import environ
 
 
@@ -22,8 +23,22 @@ class Storage:
         return self._execute('SELECT * FROM checker.list_results')
 
 
+@pytest.fixture(scope='session')
+def producer():
+    producer_process = Popen(['python', '-m', 'website_checker.producer'])
+    yield producer_process
+    producer_process.kill()
+
+
+@pytest.fixture(scope='session')
+def consumer():
+    consumer_process = Popen(['python', '-m', 'website_checker.consumer'])
+    yield consumer_process
+    consumer_process.kill()
+
+
 @pytest.fixture
-def checker():
+def checker(producer, consumer):
     return Checker()
 
 
