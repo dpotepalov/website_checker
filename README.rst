@@ -6,4 +6,4 @@ The plan is to develop 2 backends: **checker-producer** will do the monitoring a
 to a Kafka topic, **checker-consumer** will read monitoring events from the same topic and store
 them in a PostgreSQL database.
 
-Development just started, not much more to say at this point.
+To run tests, execute ``make test``
