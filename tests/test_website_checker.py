@@ -19,4 +19,7 @@ def test_records_ok_if_site_available(checker, storage):
     assert storage.list() == []
     checker.start_monitoring('httpstat.us/200')
     new_list = _wait_until_changes(storage.list, _ms_from_now(100), [])
-    assert new_list == [CheckResult('httpstat.us/200', 200)]
+    assert len(new_list) == 1
+    assert new_list[0].website == 'httpstat.us/200'
+    assert new_list[0].httpcode == 200
+    # TODO: check time-related members
