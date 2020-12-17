@@ -3,6 +3,7 @@ import aiopg
 import logging
 import psycopg2
 import signal
+import time
 
 from kafka.errors import KafkaError
 from aiokafka import AIOKafkaConsumer
@@ -99,7 +100,7 @@ def create_kafka(config):
 # TODO: implement
 def decode(message):
     logging.info('got message %s', message.value.decode('utf-8'))
-    return CheckResult('/url', 200, None, datetime.now(), 'perfect')
+    return CheckResult('/url', 200, 1.0, time.time(), 'perfect')
 
 
 def _insert_sql(checks):
@@ -107,10 +108,20 @@ def _insert_sql(checks):
     return 'INSERT INTO checker.results VALUES {}'.format(values_template)
 
 
+def _pg_tuple(check):
+    return (
+        check.website,
+        check.httpcode,
+        timedelta(seconds=check.response_time),
+        datetime.utcfromtimestamp(check.timestamp),
+        check.details,
+    )
+
+
 async def store(checks, pool):
     async with pool.acquire() as conn, log_pg_error():
         async with conn.cursor() as cursor:
-            await cursor.execute(_insert_sql(checks), [astuple(c) for c in checks])
+            await cursor.execute(_insert_sql(checks), [_pg_tuple(c) for c in checks])
 
 
 async def consume_checks(config, pg_pool):

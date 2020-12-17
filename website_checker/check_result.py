@@ -6,6 +6,6 @@ from datetime import datetime, timedelta
 class CheckResult:
     website: str
     httpcode: int
-    response_time: timedelta
-    timestamp: datetime
+    response_time: float
+    timestamp: float
     details: str = ''
