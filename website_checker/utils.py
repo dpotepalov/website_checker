@@ -2,6 +2,8 @@ import asyncio
 import logging
 import signal
 
+from contextlib import asynccontextmanager
+
 
 def _handle_termination(signame, loop):
     logging.error('received %s, stopping', signame)
@@ -17,3 +19,11 @@ def setup_termination():
 
 def setup_logging():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+
+
+@asynccontextmanager
+async def quit_if_cancelled():
+    try:
+        yield
+    except asyncio.CancelledError:
+        logging.error('cancelled, processing stopped')
