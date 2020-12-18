@@ -12,7 +12,7 @@ from aiokafka.helpers import create_ssl_context
 from asyncio import wait_for, sleep
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, astuple
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 from website_checker.error_handlers import (
     handle_kafka_error,
     handle_pg_error,
@@ -110,7 +110,7 @@ def _pg_tuple(check):
         check.website,
         check.httpcode,
         timedelta(seconds=check.response_time),
-        datetime.utcfromtimestamp(check.timestamp),
+        datetime.fromtimestamp(check.timestamp, timezone.utc),
         check.details,
     )
 
