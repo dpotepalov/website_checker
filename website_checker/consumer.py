@@ -23,8 +23,8 @@ from website_checker.utils import setup_termination, setup_logging, quit_if_canc
 
 @dataclass
 class Config:
-    consumer_timeout: float
-    storage_timeout: float
+    kafka_timeout: float
+    postgres_timeout: float
     postgres_uri: str
     postgres_batch_size: int
     kafka_uri: str
@@ -45,8 +45,8 @@ def _config_from_env():
         return env[var_name] if var_name in env else default
 
     return Config(
-        consumer_timeout=float(_read_optional_var('CONSUMER_TIMEOUT', 1.0)),
-        storage_timeout=float(_read_optional_var('STORAGE_TIMEOUT', 1.0)),
+        kafka_timeout=float(_read_optional_var('KAFKA_TIMEOUT', 1.0)),
+        postgres_timeout=float(_read_optional_var('POSTGRES_TIMEOUT', 1.0)),
         postgres_uri=_read_var('POSTGRES_URI'),
         postgres_batch_size=int(_read_optional_var('POSTGRES_BATCH_SIZE', 1.0)),
         kafka_uri=_read_var('KAFKA_URI'),
@@ -77,7 +77,12 @@ class Batch:
 
 
 async def _create_pg_pool(config):
-    return await aiopg.create_pool(dsn=config.postgres_uri, minsize=0, maxsize=1)
+    return await aiopg.create_pool(
+        dsn=config.postgres_uri,
+        timeout=config.postgres_timeout,
+        minsize=0,
+        maxsize=1,
+    )
 
 
 def _create_kafka(config):
@@ -92,6 +97,7 @@ def _create_kafka(config):
         group_id=config.kafka_group_id,
         enable_auto_commit=config.kafka_group_id is None,
         auto_offset_reset='latest',
+        request_timeout_ms=int(config.kafka_timeout * 1000),
         security_protocol="SSL",
         ssl_context=ssl_context,
     )
@@ -123,7 +129,7 @@ def _pg_tuple(check):
 
 async def _store(checks, pool):
     async with pool.acquire() as conn, handle_pg_error():
-        async with conn.cursor() as cursor:
+        async with conn.cursor(timeout=pool.timeout) as cursor:
             await cursor.execute(_insert_sql(checks), [_pg_tuple(c) for c in checks])
 
 
