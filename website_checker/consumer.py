@@ -91,6 +91,7 @@ def _create_kafka(config):
         config.kafka_topic,
         bootstrap_servers=config.kafka_uri,
         group_id=config.kafka_group_id,
+        enable_auto_commit=config.kafka_group_id is None,
         auto_offset_reset='latest',
         security_protocol="SSL",
         ssl_context=ssl_context,
@@ -124,10 +125,13 @@ async def _store(checks, pool):
             await cursor.execute(_insert_sql(checks), [_pg_tuple(c) for c in checks])
 
 
-async def _batch_store(check, batch, pool):
+async def _batch_store(config, check, batch, pool, kafka_client):
     batch.append(check)
     if batch.is_full():
         await _store(batch.checks, pool)
+        logging.info('stored %s', len(batch.checks))
+        if config.kafka_group_id is not None:
+            await kafka_client.commit()
         batch.clear()
 
 
@@ -137,7 +141,7 @@ async def _consume_checks(config, pg_pool):
         async for message in kafka_client:
             check = _decode(message)
             if check is not None:
-                await _batch_store(check, batch, pg_pool)
+                await _batch_store(config, check, batch, pg_pool, kafka_client)
 
 
 async def _run_consumer():
