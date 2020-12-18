@@ -1,6 +1,7 @@
 import json
 import pytest
 import psycopg2
+import time
 from psycopg2.extras import NamedTupleCursor
 from subprocess import Popen
 from os import environ

@@ -30,6 +30,7 @@ class Config:
     postgres_batch_size: int
     kafka_uri: str
     kafka_topic: str
+    kafka_group_id: str
     kafka_ca_cert_path: str
     kafka_cert_path: str
     kafka_cert_key_path: str
@@ -51,6 +52,7 @@ def _config_from_env():
         postgres_batch_size=int(_read_optional_var('POSTGRES_BATCH_SIZE', 1.0)),
         kafka_uri=_read_var('KAFKA_URI'),
         kafka_topic=_read_var('KAFKA_TOPIC'),
+        kafka_group_id=_read_optional_var('KAFKA_GROUP_ID'),
         kafka_ca_cert_path=_read_var('KAFKA_CA_CERT_PATH'),
         kafka_cert_path=_read_var('KAFKA_CERT_PATH'),
         kafka_cert_key_path=_read_var('KAFKA_CERT_KEY_PATH')
@@ -88,6 +90,7 @@ def _create_kafka(config):
     return AIOKafkaConsumer(
         config.kafka_topic,
         bootstrap_servers=config.kafka_uri,
+        group_id=config.kafka_group_id,
         auto_offset_reset='latest',
         security_protocol="SSL",
         ssl_context=ssl_context,
