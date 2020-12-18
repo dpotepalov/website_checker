@@ -9,7 +9,6 @@ import time
 from kafka.errors import KafkaError
 from aiokafka import AIOKafkaConsumer
 from aiokafka.helpers import create_ssl_context
-from asyncio import wait_for, sleep
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, astuple
 from datetime import timedelta, datetime, timezone
