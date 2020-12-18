@@ -8,18 +8,16 @@ from os import environ
 
 
 class Checker:
-    def __init__(self):
-        websites_file = environ['WEBSITES_FILE']
-        open(websites_file, 'w')
+    def __init__(self, websites_file):
+        self.websites_file = websites_file
+        open(self.websites_file, 'w')
 
     def start_monitoring(self, url, page_regex=None):
-        assert 'WEBSITES_FILE' in environ
-        websites_file = environ['WEBSITES_FILE']
         website = {'uri': url}
         if page_regex is not None:
             website['page_regex'] = page_regex
         websites_dict = [website]
-        json.dump(websites_dict, open(websites_file, 'w'))
+        json.dump(websites_dict, open(self.websites_file, 'w'))
 
 
 class Storage:
@@ -42,8 +40,15 @@ class Storage:
 
 
 @pytest.fixture(scope='session')
-def producer():
-    producer_process = Popen(['python', '-m', 'website_checker.producer'])
+def websites_file(tmpdir_factory):
+    return str(tmpdir_factory.mktemp("websites").join("websites.json"))
+
+
+@pytest.fixture(scope='session')
+def producer(websites_file):
+    producer_env = environ.copy()
+    producer_env['WEBSITES_FILE'] = websites_file
+    producer_process = Popen(['python', '-m', 'website_checker.producer'], env=producer_env)
     yield producer_process
     producer_process.kill()
 
@@ -56,8 +61,8 @@ def consumer():
 
 
 @pytest.fixture
-def checker(producer, consumer):
-    return Checker()
+def checker(producer, consumer, websites_file):
+    return Checker(websites_file)
 
 
 @pytest.fixture
