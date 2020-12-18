@@ -6,16 +6,18 @@ import msgpack
 import re
 import time
 
-from kafka.errors import KafkaError
-from aiohttp import ClientSSLError, ClientConnectionError, ClientResponseError, ClientPayloadError, ClientError
 from aiokafka import AIOKafkaProducer
 from aiokafka.helpers import create_ssl_context
-from asyncio import wait_for, sleep, TimeoutError
-from contextlib import contextmanager, asynccontextmanager
+from asyncio import wait_for, sleep
 from dataclasses import dataclass, asdict
 from datetime import datetime
-from json import JSONDecodeError
-from marshmallow.exceptions import ValidationError
+from website_checker.error_handlers import (
+    handle_kafka_error,
+    handle_json_file_errors,
+    handle_regex_compile_error,
+    handle_website_schema_errors,
+    record_errors_timings,
+)
 from website_checker.structs import CheckResult, Website
 from website_checker.utils import setup_termination, setup_logging, quit_if_cancelled
 
@@ -92,26 +94,6 @@ async def produce(checks, kafka_client, topic):
     await kafka_client.send_batch(batch, topic, partition=None)
 
 
-@asynccontextmanager
-async def record_errors_timings(check_result):
-    try:
-        yield
-    except TimeoutError:
-        check_result.details = 'timed out'
-    except ClientSSLError:
-        check_result.details = 'ssl error'
-    except ClientConnectionError:
-        check_result.details = 'connection error'
-    except ClientResponseError:
-        check_result.details = 'invalid server response'
-    except ClientPayloadError:
-        check_result.details = 'invalid response body'
-    except ClientError as e:
-        check_result.details = 'client error'
-        logging.error('client error: %s', e)
-    check_result.response_time = time.time() - check_result.timestamp
-
-
 async def check_body(response, regex):
     if regex is None:
         return ''
@@ -134,34 +116,6 @@ async def check(website, http_session):
 
 async def check_in_parallel(websites, http_session):
     return await asyncio.gather(*(check(w, http_session) for w in websites))
-
-
-@contextmanager
-def handle_json_file_errors():
-    try:
-        yield
-    except OSError as e:
-        logging.error('failed to open websites file: %s', e)
-    except JSONDecodeError as e:
-        logging.error('invalid websites json, error: %s', e)
-
-
-@contextmanager
-def handle_website_schema_errors():
-    try:
-        yield
-    except KeyError as e:
-        logging.error('invalid websites dict, missing key: %s', e)
-    except ValidationError as e:
-        logging.error('invalid websites dict: %s', e)
-
-
-@contextmanager
-def handle_regex_compile_error():
-    try:
-        yield
-    except re.error as e:
-        logging.error('invalid regex: %s', e)
 
 
 @handle_regex_compile_error()
@@ -190,14 +144,6 @@ async def periodically_check_websites(config, http_session):
             await sleep(config.check_interval)
 
 
-@asynccontextmanager
-async def retry_on_kafka_error():
-    try:
-        yield
-    except KafkaError as e:
-        logging.error('Kafka client failed, error %s', e)
-
-
 def create_http_session(config):
     timeout = aiohttp.ClientTimeout(
         total=config.check_timeout,
@@ -214,7 +160,7 @@ async def run_producer():
     validate(config)
     async with create_http_session(config) as http_session, quit_if_cancelled():
         while True:
-            async with retry_on_kafka_error():
+            async with handle_kafka_error():
                 await periodically_check_websites(config, http_session)
 
 

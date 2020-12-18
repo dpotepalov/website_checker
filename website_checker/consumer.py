@@ -13,7 +13,11 @@ from asyncio import wait_for, sleep
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, astuple
 from datetime import timedelta, datetime
-from msgpack import FormatError, ExtraData
+from website_checker.error_handlers import (
+    handle_kafka_error,
+    handle_pg_error,
+    handle_unpacking_errors,
+)
 from website_checker.structs import CheckResult
 from website_checker.utils import setup_termination, setup_logging, quit_if_cancelled
 
@@ -71,27 +75,6 @@ class Batch:
         self.checks = []
 
 
-@asynccontextmanager
-async def quit_on_kafka_error():
-    try:
-        yield
-    except KafkaError as e:
-        # TODO: what if it is retriable? resetting the client
-        # may be overkill in such case, though still a
-        # possible course of action.
-        logging.error('consume Kafka failed, error %s', e)
-
-
-@asynccontextmanager
-async def log_pg_error():
-    try:
-        yield
-    except psycopg2.Warning as e:
-        logging.warn('postgresql warning %s', e.msg)
-    except psycopg2.Error as e:
-        logging.error('postgresql error %s %s: %s', e.msg, e.pgcode, e.pgerror)
-
-
 async def create_pg_pool(config):
     return await aiopg.create_pool(dsn=config.storage_dsn, minsize=0, maxsize=1)
 
@@ -111,19 +94,10 @@ def create_kafka(config):
     )
 
 
+@handle_unpacking_errors()
 def decode(message):
-    try:
-        unpacked = msgpack.unpackb(message.value, raw=False)
-        try:
-            return CheckResult(**unpacked)
-        except TypeError as e:
-            logging.warn('message unpacked to %s, but not a valid check result: %s', unpacked, e)
-            return None
-    except ExtraData:
-        logging.debug('message %s at offset %d has extra data)', message.key, message.offset)
-    except (ValueError, FormatError) as e:
-        logging.warn('message %s at offset %d ignored: %s', message.key, message.offset, e)
-        return None
+    unpacked = msgpack.unpackb(message.value, raw=False)
+    return CheckResult(**unpacked)
 
 
 def _insert_sql(checks):
@@ -142,7 +116,7 @@ def _pg_tuple(check):
 
 
 async def store(checks, pool):
-    async with pool.acquire() as conn, log_pg_error():
+    async with pool.acquire() as conn, handle_pg_error():
         async with conn.cursor() as cursor:
             await cursor.execute(_insert_sql(checks), [_pg_tuple(c) for c in checks])
 
@@ -155,7 +129,7 @@ async def batch_store(check, batch, pool):
 
 
 async def consume_checks(config, pg_pool):
-    async with create_kafka(config) as kafka_client, quit_on_kafka_error():
+    async with create_kafka(config) as kafka_client, handle_kafka_error():
         batch = Batch(config.storage_batch_size)
         async for message in kafka_client:
             check = decode(message)
