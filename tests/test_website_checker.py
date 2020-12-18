@@ -1,6 +1,6 @@
 from datetime import timedelta, datetime
 from time import sleep
-from website_checker.check_result import CheckResult
+from website_checker.structs import CheckResult
 
 
 def _ms_from_now(x):

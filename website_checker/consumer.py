@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, astuple
 from datetime import timedelta, datetime
 from msgpack import FormatError, ExtraData
-from website_checker.check_result import CheckResult
+from website_checker.structs import CheckResult
 from website_checker.utils import setup_termination, setup_logging, quit_if_cancelled
 
 

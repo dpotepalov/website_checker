@@ -16,7 +16,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 from json import JSONDecodeError
 from marshmallow.exceptions import ValidationError
-from website_checker.check_result import CheckResult, Website
+from website_checker.structs import CheckResult, Website
 from website_checker.utils import setup_termination, setup_logging, quit_if_cancelled
 
 
