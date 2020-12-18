@@ -17,4 +17,3 @@ class CheckResult:
 class Website:
     uri: str
     page_regex: str = None
-    timeout: float = 0.0
