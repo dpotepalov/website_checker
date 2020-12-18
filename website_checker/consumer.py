@@ -106,7 +106,10 @@ def _decode(message):
 
 def _insert_sql(checks):
     values_template = ','.join(['%s'] * len(checks))
-    return 'INSERT INTO checker.results VALUES {}'.format(values_template)
+    return '''
+        INSERT INTO checker.results VALUES {}
+        ON CONFLICT DO NOTHING
+    '''.format(values_template)
 
 
 def _pg_tuple(check):

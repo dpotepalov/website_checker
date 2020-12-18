@@ -7,7 +7,8 @@ CREATE TABLE checker.results(
     http_code int,
     response_time INTERVAL,
     check_timestamp timestamptz,
-    details text
+    details text,
+    PRIMARY KEY(url, check_timestamp)
 );
 
 CREATE VIEW checker.list_results AS
