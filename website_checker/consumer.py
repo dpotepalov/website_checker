@@ -26,8 +26,8 @@ from website_checker.utils import setup_termination, setup_logging, quit_if_canc
 class Config:
     consumer_timeout: float
     storage_timeout: float
-    storage_dsn: str
-    storage_batch_size: int
+    postgres_uri: str
+    postgres_batch_size: int
     kafka_uri: str
     kafka_topic: str
     kafka_ca_cert_path: str
@@ -47,8 +47,8 @@ def _config_from_env():
     return Config(
         consumer_timeout=float(_read_optional_var('CONSUMER_TIMEOUT', 1.0)),
         storage_timeout=float(_read_optional_var('STORAGE_TIMEOUT', 1.0)),
-        storage_dsn=_read_var('STORAGE_DSN'),
-        storage_batch_size=int(_read_optional_var('STORAGE_BATCH_SIZE', 1.0)),
+        postgres_uri=_read_var('POSTGRES_URI'),
+        postgres_batch_size=int(_read_optional_var('POSTGRES_BATCH_SIZE', 1.0)),
         kafka_uri=_read_var('KAFKA_URI'),
         kafka_topic=_read_var('KAFKA_TOPIC'),
         kafka_ca_cert_path=_read_var('KAFKA_CA_CERT_PATH'),
@@ -76,7 +76,7 @@ class Batch:
 
 
 async def _create_pg_pool(config):
-    return await aiopg.create_pool(dsn=config.storage_dsn, minsize=0, maxsize=1)
+    return await aiopg.create_pool(dsn=config.postgres_uri, minsize=0, maxsize=1)
 
 
 def _create_kafka(config):
@@ -130,7 +130,7 @@ async def _batch_store(check, batch, pool):
 
 async def _consume_checks(config, pg_pool):
     async with _create_kafka(config) as kafka_client, handle_kafka_error():
-        batch = Batch(config.storage_batch_size)
+        batch = Batch(config.postgres_batch_size)
         async for message in kafka_client:
             check = _decode(message)
             if check is not None:

@@ -61,5 +61,5 @@ def checker(producer, consumer):
 
 @pytest.fixture
 def storage():
-    assert 'STORAGE_CONNSTRING' in environ
-    return Storage(environ['STORAGE_CONNSTRING'])
+    assert 'POSTGRES_URI' in environ
+    return Storage(environ['POSTGRES_URI'])
