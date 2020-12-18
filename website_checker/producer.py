@@ -37,7 +37,7 @@ class Config:
     read_timeout: float
 
 
-def config_from_env():
+def _config_from_env():
     from os import environ as env
 
     def _read_var(var_name):
@@ -61,14 +61,14 @@ def config_from_env():
     )
 
 
-def validate(config):
+def _validate(config):
     if config.check_timeout > config.check_interval:
         raise ValueError('check timeout cannot exceed check interval')
     if config.connect_timeout + config.read_timeout > config.check_timeout:
         raise ValueError('connect timeout + read timeout must be less than check timeout')
 
 
-def create_kafka(config):
+def _create_kafka(config):
     ssl_context = create_ssl_context(
         cafile=config.kafka_ca_cert_path,
         certfile=config.kafka_cert_path,
@@ -81,20 +81,29 @@ def create_kafka(config):
     )
 
 
-def encode(check):
+def _create_http_session(config):
+    timeout = aiohttp.ClientTimeout(
+        total=config.check_timeout,
+        sock_connect=config.connect_timeout,
+        sock_read=config.read_timeout,
+    )
+    return aiohttp.ClientSession(headers={'User-Agent': config.user_agent}, timeout=timeout)
+
+
+def _encode(check):
     return msgpack.packb(asdict(check))
 
 
-async def produce(checks, kafka_client, topic):
+async def _produce(checks, kafka_client, topic):
     batch = kafka_client.create_batch()
     for check in checks:
-        value = encode(check)
+        value = _encode(check)
         batch.append(value=value, timestamp=None, key=None)
     batch.close()
     await kafka_client.send_batch(batch, topic, partition=None)
 
 
-async def check_body(response, regex):
+async def _check_body(response, regex):
     if regex is None:
         return ''
     async for line_bytes in response.content:
@@ -104,24 +113,24 @@ async def check_body(response, regex):
     return 'regex check failed'
 
 
-async def check(website, http_session):
+async def _check(website, http_session):
     logging.info('checking website %s', website.uri)
     check_result = CheckResult(website.uri, None, None, time.time())
     async with record_errors_timings(check_result):
         async with http_session.get(website.uri) as resp:
             check_result.httpcode = resp.status
-            check_result.details = await check_body(resp, website.page_regex)
+            check_result.details = await _check_body(resp, website.page_regex)
     return check_result
 
 
-async def check_in_parallel(websites, http_session):
-    return await asyncio.gather(*(check(w, http_session) for w in websites))
+async def _check_in_parallel(websites, http_session):
+    return await asyncio.gather(*(_check(w, http_session) for w in websites))
 
 
 @handle_regex_compile_error()
 @handle_website_schema_errors()
 @handle_json_file_errors()
-def read_websites(file_path):
+def _read_websites(file_path):
     websites_dict = json.load(open(file_path))
     websites = Website.schema().load(websites_dict, many=True)
     for website in websites:
@@ -130,42 +139,33 @@ def read_websites(file_path):
     return websites
 
 
-async def periodically_check_websites(config, http_session):
-    kafka_client = create_kafka(config)
+async def _periodically_check_websites(config, http_session):
+    kafka_client = _create_kafka(config)
     async with kafka_client:
         while True:
-            websites = read_websites(config.websites_file)
+            websites = _read_websites(config.websites_file)
             if websites is not None:
                 logging.info('checking %s websites', len(websites))
-                checks = await check_in_parallel(websites, http_session)
-                await produce(checks, kafka_client, config.kafka_topic)
+                checks = await _check_in_parallel(websites, http_session)
+                await _produce(checks, kafka_client, config.kafka_topic)
             else:
                 logging.info('no websites to check')
             await sleep(config.check_interval)
 
 
-def create_http_session(config):
-    timeout = aiohttp.ClientTimeout(
-        total=config.check_timeout,
-        sock_connect=config.connect_timeout,
-        sock_read=config.read_timeout,
-    )
-    return aiohttp.ClientSession(headers={'User-Agent': config.user_agent}, timeout=timeout)
-
-
-async def run_producer():
+async def _run_producer():
     setup_logging()
     setup_termination()
-    config = config_from_env()
-    validate(config)
-    async with create_http_session(config) as http_session, quit_if_cancelled():
+    config = _config_from_env()
+    _validate(config)
+    async with _create_http_session(config) as http_session, quit_if_cancelled():
         while True:
             async with handle_kafka_error():
-                await periodically_check_websites(config, http_session)
+                await _periodically_check_websites(config, http_session)
 
 
 def main():
-    asyncio.run(run_producer())
+    asyncio.run(_run_producer())
 
 
 if __name__ == "__main__":

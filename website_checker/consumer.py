@@ -35,7 +35,7 @@ class Config:
     kafka_cert_key_path: str
 
 
-def config_from_env():
+def _config_from_env():
     from os import environ as env
 
     def _read_var(var_name):
@@ -75,11 +75,11 @@ class Batch:
         self.checks = []
 
 
-async def create_pg_pool(config):
+async def _create_pg_pool(config):
     return await aiopg.create_pool(dsn=config.storage_dsn, minsize=0, maxsize=1)
 
 
-def create_kafka(config):
+def _create_kafka(config):
     ssl_context = create_ssl_context(
         cafile=config.kafka_ca_cert_path,
         certfile=config.kafka_cert_path,
@@ -95,7 +95,7 @@ def create_kafka(config):
 
 
 @handle_unpacking_errors()
-def decode(message):
+def _decode(message):
     unpacked = msgpack.unpackb(message.value, raw=False)
     return CheckResult(**unpacked)
 
@@ -115,40 +115,40 @@ def _pg_tuple(check):
     )
 
 
-async def store(checks, pool):
+async def _store(checks, pool):
     async with pool.acquire() as conn, handle_pg_error():
         async with conn.cursor() as cursor:
             await cursor.execute(_insert_sql(checks), [_pg_tuple(c) for c in checks])
 
 
-async def batch_store(check, batch, pool):
+async def _batch_store(check, batch, pool):
     batch.append(check)
     if batch.is_full():
-        await store(batch.checks, pool)
+        await _store(batch.checks, pool)
         batch.clear()
 
 
-async def consume_checks(config, pg_pool):
-    async with create_kafka(config) as kafka_client, handle_kafka_error():
+async def _consume_checks(config, pg_pool):
+    async with _create_kafka(config) as kafka_client, handle_kafka_error():
         batch = Batch(config.storage_batch_size)
         async for message in kafka_client:
-            check = decode(message)
+            check = _decode(message)
             if check is not None:
-                await batch_store(check, batch, pg_pool)
+                await _batch_store(check, batch, pg_pool)
 
 
-async def run_consumer():
+async def _run_consumer():
     setup_logging()
     setup_termination()
-    config = config_from_env()
-    pg_pool = await create_pg_pool(config)
+    config = _config_from_env()
+    pg_pool = await _create_pg_pool(config)
     async with pg_pool, quit_if_cancelled():
         while True:
-            await consume_checks(config, pg_pool)
+            await _consume_checks(config, pg_pool)
 
 
 def main():
-    asyncio.run(run_consumer())
+    asyncio.run(_run_consumer())
 
 
 if __name__ == "__main__":
