@@ -18,6 +18,7 @@ setuptools.setup(
         "Operating System :: OS Independent", "Development Status :: 3 - Alpha"
     ],
     python_requires='>=3.6',
+    install_requires=['aiohttp', 'aiopg', 'aiokafka', 'dataclasses-json', 'msgpack'],
     entry_points={
         'console_scripts': [
             'checker-producer=website_checker.producer:main',
