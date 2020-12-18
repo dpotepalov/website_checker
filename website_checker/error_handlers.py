@@ -3,7 +3,13 @@ import time
 import re
 import psycopg2
 
-from aiohttp import ClientSSLError, ClientConnectionError, ClientResponseError, ClientPayloadError, ClientError
+from aiohttp import (
+    ClientSSLError,
+    ClientConnectionError,
+    ClientResponseError,
+    ClientPayloadError,
+    ClientError,
+)
 from asyncio import TimeoutError
 from kafka.errors import KafkaError
 from msgpack import FormatError, ExtraData
