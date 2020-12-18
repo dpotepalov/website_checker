@@ -23,6 +23,7 @@ class Config:
     consumer_timeout: float
     storage_timeout: float
     storage_dsn: str
+    storage_batch_size: int
     kafka_uri: str
     kafka_topic: str
     kafka_ca_cert_path: str
@@ -43,12 +44,31 @@ def config_from_env():
         consumer_timeout=float(_read_optional_var('CONSUMER_TIMEOUT', 1.0)),
         storage_timeout=float(_read_optional_var('STORAGE_TIMEOUT', 1.0)),
         storage_dsn=_read_var('STORAGE_DSN'),
+        storage_batch_size=int(_read_optional_var('STORAGE_BATCH_SIZE', 1.0)),
         kafka_uri=_read_var('KAFKA_URI'),
         kafka_topic=_read_var('KAFKA_TOPIC'),
         kafka_ca_cert_path=_read_var('KAFKA_CA_CERT_PATH'),
         kafka_cert_path=_read_var('KAFKA_CERT_PATH'),
         kafka_cert_key_path=_read_var('KAFKA_CERT_KEY_PATH')
     )
+
+
+class Batch:
+    checks = []
+
+    def __init__(self, max_size):
+        self.max_size = max_size
+
+    def append(self, check):
+        if self.is_full():
+            raise RuntimeError('batch full, cannot append!')
+        self.checks.append(check)
+
+    def is_full(self):
+        return len(self.checks) >= self.max_size
+
+    def clear(self):
+        self.checks = []
 
 
 @asynccontextmanager
@@ -127,13 +147,20 @@ async def store(checks, pool):
             await cursor.execute(_insert_sql(checks), [_pg_tuple(c) for c in checks])
 
 
+async def batch_store(check, batch, pool):
+    batch.append(check)
+    if batch.is_full():
+        await store(batch.checks, pool)
+        batch.clear()
+
+
 async def consume_checks(config, pg_pool):
     async with create_kafka(config) as kafka_client, quit_on_kafka_error():
+        batch = Batch(config.storage_batch_size)
         async for message in kafka_client:
             check = decode(message)
             if check is not None:
-                # TODO: add batching for checks
-                await store([check], pg_pool)
+                await batch_store(check, batch, pg_pool)
 
 
 async def run_consumer():
